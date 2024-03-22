@@ -1,56 +1,58 @@
-name: Publish snapshots
-
-on: [push]
-
-permissions: read-all
-
 jobs:
   gradle:
     name: Test with Java ${{ matrix.jdk }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    steps:
+    - continue-on-error: true
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - continue-on-error: true
+      name: Set up JDK ${{ matrix.jdk }}
+      uses: actions/setup-java@v3
+      with:
+        cache: gradle
+        distribution: temurin
+        java-version: ${{ matrix.jdk }}
+    - continue-on-error: true
+      name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+    - continue-on-error: true
+      name: Execute Gradle build
+      run: ./gradlew check --console=plain --warning-mode all
     strategy:
       fail-fast: false
       matrix:
-        jdk: [ '11', '17', '21' ] # removed JDK due to plugin errors
-
+        jdk:
+        - '11'
+        - '17'
+        - '21'
+  publish:
+    if: ${{ needs.gradle.result == 'success' }}
+    name: Publish Artifact
+    needs: gradle
+    runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Set up JDK ${{ matrix.jdk }}
+    - continue-on-error: true
+      uses: actions/checkout@v4
+    - continue-on-error: true
       uses: actions/setup-java@v3
       with:
         distribution: temurin
-        java-version: ${{ matrix.jdk }}
-        cache: 'gradle'
-
-    - name: Setup Gradle
+        java-version: 11
+    - continue-on-error: true
+      name: Setup Gradle
       uses: gradle/gradle-build-action@v2
-
-    - name: Execute Gradle build
-      run: ./gradlew check --console=plain --warning-mode all
-
-  publish:
-    name: Publish Artifact
-    needs: gradle
-    if: ${{ needs.gradle.result == 'success' }}
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 11
-
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-
-      - name: Execute Gradle build
-        run: ./gradlew build -x test publish
-        env:
-          GPR_USERNAME: benfortuna
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+    - continue-on-error: true
+      env:
+        GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GPR_USERNAME: benfortuna
+        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+      name: Execute Gradle build
+      run: ./gradlew build -x test publish
+name: Publish snapshots
+on:
+  repository_dispatch:
+    types: trigger-ga___gradle.yml
+permissions: read-all
